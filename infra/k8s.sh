@@ -53,7 +53,7 @@ git clone https://github.com/kubernetes/autoscaler.git
 ./autoscaler/vertical-pod-autoscaler/hack/vpa-up.sh 
 helm repo add momo-store ${NEXUS_REPO_URL_HELM} --username ${NEXUS_REPO_USER} --password ${NEXUS_REPO_PASS} && helm repo update
 helm install my-prom momo-store/prometheus --namespace momo-store
-kubectl apply -f k8s-momo-store/ingress-promet.yaml 
+kubectl apply -f k8s-momo-store/ingress-promet.yaml -n momo-store
 helm repo add tricksterproxy https://helm.tricksterproxy.io && helm repo update
 helm install trickster tricksterproxy/trickster --namespace momo-store -f ./k8s-momo-store/trickster.yaml
 kubectl apply -f k8s-momo-store/grafana.yaml -n momo-store

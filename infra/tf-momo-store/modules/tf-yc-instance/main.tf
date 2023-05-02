@@ -59,10 +59,10 @@ resource "yandex_kubernetes_node_group" "worker-node" {
     }
     resources {
         cores = 2
-        memory = 2
+        memory = 4
     }    
     boot_disk {
-        size = 30
+        size = 40
         type = "network-hdd"
     }
     network_interface {
