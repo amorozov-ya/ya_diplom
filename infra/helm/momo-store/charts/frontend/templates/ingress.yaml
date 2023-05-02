@@ -1,0 +1,33 @@
+---
+{{- $svcPort := .Values.service.port -}}
+{{- $className := .Values.ingress.className -}}
+{{- $host := .Values.ingress.host -}}
+{{- $cert_id := .Values.ingress.cert_id -}}
+
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Chart.Name }}
+  labels:
+    {{- include "frontend.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ingress
+    app.kubernetes.io/part-of: momo-store
+spec:
+  ingressClassName: {{ $className }}
+  tls:
+      - hosts:
+        - "{{ $host }}"
+        secretName: {{ $cert_id }}
+  rules:
+  - host: "{{ $host }}"
+    http:
+      paths:
+      - path: "/"
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ .Chart.Name }}
+            port:
+              number: {{ $svcPort }}
+

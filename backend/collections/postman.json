@@ -1,0 +1,42 @@
+{
+	"info": {
+		"_postman_id": "eeaf762b-4ff3-40f3-8462-196432bd014d",
+		"name": "momo",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "25505826"
+	},
+	"item": [
+		{
+			"name": "bacakend",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {\r",
+							"    pm.response.to.have.status(200);\r",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://backend:8081/products",
+					"protocol": "http",
+					"host": [
+						"backend"
+					],
+					"port": "8081",
+					"path": [
+						"products"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
