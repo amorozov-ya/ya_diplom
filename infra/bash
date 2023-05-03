@@ -1,0 +1,148 @@
+# Создание сертификата 
+https://cloud.yandex.ru/docs/certificate-manager/operations/managed/cert-create
+# Создать публичную зону DNS
+https://cloud.yandex.ru/docs/dns/operations/zone-create-public
+https://cloud.yandex.ru/docs/dns/quickstart?from=int-console-help-center-or-nav
+# Создать ресурсную запись
+https://cloud.yandex.ru/docs/dns/operations/resource-record-create
+# Установка Ingress-контроллера NGINX с менеджером для сертификатов Let's Encrypt
+https://cloud.yandex.ru/docs/managed-kubernetes/tutorials/ingress-cert-manager
+
+
+
+# Установка argocd
+helm pull oci://cr.yandex/yc-marketplace/yandex-cloud/argo/chart/argo-cd --version 5.4.3-7 \
+  --untar && \
+helm install --namespace momo-store  argo-cd ./argo-cd/
+kubectl -n services get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+nueTDyfcFQAew5nB
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argo
+  namespace: momo-store
+  labels:
+    app.kubernetes.io/name: argo
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+spec:
+  ingressClassName: nginx
+  tls:
+      - hosts:
+        - "argo.momostoreby.site"
+        secretName: k8s-secret
+  rules:
+  - host: "argo.momostoreby.site"
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: argo-cd-argocd-server
+            port:
+              name: https
+
+####
+
+
+kubectl get pods --namespace=momo-store
+kubectl get svc
+
+# Мониторинг кластера с помощью Prometheus и Grafana
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts && \
+helm repo update
+helm install my-prom prometheus-community/prometheus --namespace momo-store
+kubectl apply -f ./k8s/ingress-promet.yaml -n momo-store
+helm repo add tricksterproxy https://helm.tricksterproxy.io && helm repo update
+nano ./charts/trickster.yaml
+helm install trickster tricksterproxy/trickster --namespace momo-store -f ./charts/trickster.yaml
+kubectl apply -f k8s/grafana.yaml -n momo-store
+kubectl apply -f k8s/ingress-grafana.yaml -n momo-store
+
+
+
+
+
+
+
+
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana
+  labels:
+    app.kubernetes.io/component: ingress
+    app.kubernetes.io/part-of: momo-store
+spec:
+  ingressClassName: nginx
+  tls:
+      - hosts:
+        - "grafana.momostoreby.site"
+        secretName: k8s-secret
+  rules:
+  - host: "grafana.momostoreby.site"
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: stable-grafana
+            port:
+              number: 80
+
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: alertmanager
+  labels:
+    app.kubernetes.io/component: ingress
+    app.kubernetes.io/part-of: momo-store
+spec:
+  ingressClassName: nginx
+  tls:
+      - hosts:
+        - "alert.momostoreby.site"
+        secretName: k8s-secret
+  rules:
+  - host: "alert.momostoreby.site"
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: stable-kube-prometheus-sta-alertmanager
+            port:
+              number: 9093
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: prom-operator
+  labels:
+    app.kubernetes.io/component: ingress
+    app.kubernetes.io/part-of: momo-store
+spec:
+  ingressClassName: nginx
+  tls:
+      - hosts:
+        - "promet.momostoreby.site"
+        secretName: k8s-secret
+  rules:
+  - host: "promet.momostoreby.site"
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: stable-kube-prometheus-sta-prometheus
+            port:
+              number: 9090

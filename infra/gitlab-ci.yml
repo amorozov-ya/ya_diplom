@@ -1,0 +1,53 @@
+stages:
+    - release
+    - deploy
+
+helm-repo-update:
+    stage: release
+    script:
+        - apt-get update
+        - curl https://baltocdn.com/helm/signing.asc | gpg --dearmor |  tee /usr/share/keyrings/helm.gpg > /dev/null
+        - apt-get install apt-transport-https --yes
+        - echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" |  tee /etc/apt/sources.list.d/helm-stable-debian.list
+        - apt-get update
+        - apt-get install helm
+        - helm repo add momo-store ${NEXUS_REPO_URL_HELM} --username ${NEXUS_REPO_USER} --password ${NEXUS_REPO_PASS} || true
+        - helm repo update momo-store
+        - cd ./infra/helm
+        - helm package ./momo-store
+        - helm package ./prometheus
+        - curl -u ${NEXUS_REPO_USER}:${NEXUS_REPO_PASS} ${NEXUS_REPO_URL_HELM} --upload-file momo-store-*  
+        - curl -u ${NEXUS_REPO_USER}:${NEXUS_REPO_PASS} ${NEXUS_REPO_URL_HELM} --upload-file prometheus-*
+    when: manual
+
+deploy_terraform:
+    stage: deploy
+    before_script:
+      - 'command -v ssh-agent >/dev/null || ( apt-get update -y && apt-get install openssh-client -y )'
+      - eval $(ssh-agent -s) 
+      - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+      - mkdir -p ~/.ssh
+      - chmod 600 ~/.ssh
+      - echo "$SSH_KNOWN_HOSTS" >> ~/.ssh/known_hosts
+      - chmod 644 ~/.ssh/known_hosts
+    script:
+      - scp -r ${CI_PROJECT_DIR}/infra/tf-momo-store ${DEV_USER}@${DEV_HOST}:/home/${DEV_USER}/
+      - ssh ${DEV_USER}@${DEV_HOST} "export "TF_VAR_token=${TF_VAR_token}" export "DEV_USER=${DEV_USER}"; setsid /bin/bash -s" < ./infra/tf.sh
+    when: manual
+
+deploy_yc_k8s:
+    stage: deploy
+    before_script:
+      - 'command -v ssh-agent >/dev/null || ( apt-get update -y && apt-get install openssh-client -y )'
+      - eval $(ssh-agent -s) 
+      - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+      - mkdir -p ~/.ssh
+      - chmod 600 ~/.ssh
+      - echo "$SSH_KNOWN_HOSTS" >> ~/.ssh/known_hosts
+      - chmod 644 ~/.ssh/known_hosts
+    script:
+      - scp -r ${CI_PROJECT_DIR}/infra/k8s-momo-store ${DEV_USER}@${DEV_HOST}:/home/${DEV_USER}/
+      - ssh ${DEV_USER}@${DEV_HOST} "export "EXTERAL_IP=${EXTERAL_IP}" export "DEV_USER=${DEV_USER}" export "DOKERCONFIGJSON=${DOKERCONFIGJSON}"; setsid /bin/bash -s" < ./infra/k8s.sh
+    #needs:
+    #  - deploy_terraform
+    when: manual
