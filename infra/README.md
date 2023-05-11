@@ -16,7 +16,7 @@
 #       SSH_PRIVATE_KEY
 #       SSH_KNOWN_HOSTS
 #       TF_VAR_token
-#   - после завершения задачи будет вывод с IP адрессами и сертификатом кластера. вывод ip_ingress необходимо добавить как переменную EXTERAL_IP в CI/CD GitLab
+#   - после завершения задачи будет вывод с IP адресами и сертификатом кластера. вывод ip_ingress необходимо добавить, как переменную EXTERAL_IP в CI/CD GitLab
 #
 #
 #
@@ -27,9 +27,9 @@
 #       - установка в кластер стека Prometheus\trickster\Grafana
 #       - добавление ingress для Prometheus\Grafana 
 #       - Grafana dashboard import 8588 - Kubernetes Deployment Statefulset Daemonset metrics  
-#       - Grafana метрики бэкэна - labels: app="backend" instance="backend:8081" job="backend_metrics"
+#       - Grafana метрики бэкэнда - labels: app="backend" instance="backend:8081" job="backend_metrics"
 #       - Требуется указать ID сертификата, ранее полученного через Certificate Manager/Сертификаты в панели управления YandexCloud, и внести его значение в файл ./infra/k8s-momo-store/exteral-secret.yaml  spec.data.secretKey.remoteRef.key 
-#        - ./k8s-momo-store хранятся файлы конфигурациии k8s - deploy grafana и ingress для grafana\prometheus, для указания своих доменов в ingress-файлах укажите свои значения домена (hosts)и секрета (secretName).      
+#        - ./k8s-momo-store хранятся файлы конфигурации k8s - deploy grafana и ingress для grafana\prometheus, для указания своих доменов в ingress-файлах укажите свои значения домена (hosts)и секрета (secretName).      
 #        - требует указать переменные и их значения в CI/CD
 #           DEV_USER
 #           DEV_HOST
@@ -38,8 +38,7 @@
 #           EXTERAL_IP
 #           DOKERCONFIGJSON
 #       - После установки требуется зайти в grafana (grafana.momostoreby.site), логин по умолчанию graafana - admin:admin, до   бавить провайдера Promethheus (URL — http://trickster:8480), добавить дашборды мониторинга.
-#       - Задача не всегда отрабатывает с первого раза, стоит задержка в минуту, но не всегда успеват подготовится хранилище секретов external-secrets, отвечает за привязывние сертифката к ingress. Можно просто перезапустить задачу при обнаружении ошибки: 
-#   Error from server (InternalError): error when creating "./k8s-momo-store/secretstore.yaml": Internal error occurred: failed calling webhook "validate.secretstore.external-secrets.io": failed to call webhook: Post "https://external-secrets-webhook.momo-store.svc:443/validate-external-secrets-io-v1beta1-secretstore?timeout=5s": dial tcp 10.50.212.11:443: connect: connection refused
+#       - Задача не всегда отрабатывает с первого раза, стоит задержка в две минуты, при возникновении ошибки необходимо увеличить время задержки, а задачу можно просто перезапустить.
 #
 #
 #momostoreby.site
