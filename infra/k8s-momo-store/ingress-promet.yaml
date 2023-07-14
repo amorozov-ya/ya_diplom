@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: prom-operator
+  labels:
+    app.kubernetes.io/component: ingress
+    app.kubernetes.io/part-of: momo-store
+spec:
+  ingressClassName: nginx
+  tls:
+      - hosts:
+        - "promet.momostoreby.site"
+        secretName: k8s-secret
+  rules:
+  - host: "promet.momostoreby.site"
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: my-prom-prometheus-server
+            port:
+              number: 80
+

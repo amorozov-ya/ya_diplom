@@ -1,0 +1,145 @@
+cache:
+    paths:
+        - ${CI_PROJECT_DIR}/cache
+        
+include:
+    - template: Security/SAST.gitlab-ci.yml 
+    - project: 'templates/ci'
+      file: 'DockerInDockerTemplate.yml'
+ 
+variables:
+    SAST_EXCLUDED_ANALYZERS: '"sonarqube-front-sast" "nodejs-scan-sast" "eslint-sast"'
+    
+stages:
+    - build
+    - test
+    - release
+    - notify
+    - deploy
+
+build:
+    stage: build
+    image: docker:20.10.12-dind-rootless
+    before_script:
+        - until docker info; do sleep 1; done
+        - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    script:
+        - cd backend
+        - >
+            docker build
+            --tag $CI_REGISTRY_IMAGE/momo-store-backend:$VERSION
+            .
+        - docker push $CI_REGISTRY_IMAGE/momo-store-backend:$VERSION
+    rules: 
+        - changes:
+            - backend/*
+
+test_postman:
+    stage: test
+    image: docker:20.10.12-dind-rootless
+    allow_failure: true
+    before_script:
+        - until docker info; do sleep 1; done
+        - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    script:
+        - docker network create -d bridge test
+        - docker run -d --pull always --restart always --name backend --network=test $CI_REGISTRY_IMAGE/momo-store-backend:$VERSION
+        - sleep 30
+        - docker run -v $CI_PROJECT_DIR/backend/collections:/etc/newman --rm --network=test -t postman/newman run  /etc/newman/postman.json
+    needs:
+        - build
+
+sonarqube-backend-sast:
+    stage: test
+    image:
+        name: sonarsource/sonar-scanner-cli:latest
+        entrypoint: [""]
+    script:
+        - cd backend
+        - >
+          sonar-scanner \
+            -Dsonar.projectKey=${SONAR_PROJECT_KEY_BACK} \
+            -Dsonar.sources=. \
+            -Dsonar.host.url=${SONARQUBE_URL} \
+            -Dsonar.login=${SONAR_LOGIN_BACK}
+
+upload-backend-latest:
+    stage: release
+    variables:
+        GIT_STRATEGY: none
+    image: docker:20.10.12-dind-rootless
+    before_script:
+        - until docker info; do sleep 1; done
+        - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    script:
+        - docker pull $CI_REGISTRY_IMAGE/momo-store-backend:$VERSION
+        - docker tag $CI_REGISTRY_IMAGE/momo-store-backend:$VERSION $CI_REGISTRY_IMAGE/momo-store-backend:latest
+        - docker push $CI_REGISTRY_IMAGE/momo-store-backend:latest
+    needs:
+        - build
+
+helm-repo-update:
+    stage: release
+    script:
+        - apt-get update
+        - curl https://baltocdn.com/helm/signing.asc | gpg --dearmor |  tee /usr/share/keyrings/helm.gpg > /dev/null
+        - apt-get install apt-transport-https --yes
+        - echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" |  tee /etc/apt/sources.list.d/helm-stable-debian.list
+        - apt-get update
+        - apt-get install helm && apt-get install vim -y
+        - helm repo add momo-store ${NEXUS_REPO_URL_HELM} --username ${NEXUS_REPO_USER} --password ${NEXUS_REPO_PASS} || true
+        - helm repo update momo-store
+        - helm pull momo-store/momo-store
+        - TAR=`ls -R | grep *.tgz`
+        - tar -xvf $TAR
+        - rm -f $TAR
+        - VERSION_CHART_DEP=`cat ./momo-store/charts/backend/Chart.yaml |grep "version:" | grep  -o '[0-9].[0-9].[0-9].*'` 
+        - A=`cat ./momo-store/charts/backend/Chart.yaml |grep "version:" | grep  -o '[0-9].[0-9].[0-9].*' | cut -c 5-10`
+        - B=1
+        - let C=$A+$B
+        - |
+            cat > ./momo-store/charts/backend/Chart.yaml << ENDOFFILE
+            apiVersion: v2
+            appVersion: $VERSION
+            description: A Momo Store Backend Helm chart for Kubernetes
+            name: backend
+            type: application
+            version: 1.0.$C
+            ENDOFFILE
+        - VERSION_CHART=`head -n 13 ./momo-store/Chart.yaml |tail -1 | grep  -o '[0-9].[0-9].[0-9].*'`
+        - X=`head -n 13 ./momo-store/Chart.yaml |tail -1 | grep  -o '[0-9].[0-9].[0-9].*' | cut -c 5-10`
+        - let Y=$X+$B
+        - ex -sc 6s/$VERSION_CHART_DEP/1.0.$C -cx ./momo-store/Chart.yaml
+        - ex -sc 13s/$VERSION_CHART/0.1.$Y -cx ./momo-store/Chart.yaml
+        - helm package ./momo-store
+        - curl -u ${NEXUS_REPO_USER}:${NEXUS_REPO_PASS} ${NEXUS_REPO_URL_HELM} --upload-file momo-store-*
+    needs:
+        - upload-backend-latest    
+    when: manual
+    
+notify: 
+    stage: notify
+    needs:
+        - upload-backend-latest
+    variables:
+        DATA: '{"chat_id":-1001813217062, "text":"Готов новый образ Momo-Backend $VERSION", "reply_markup":{"inline_keyboard":[[{"text":"Docker pull", "url":"$CI_REGISTRY_IMAGE/sausage-backend:$VERSION"}]]}}'
+    script:      
+        - 'curl -X POST -H "$CONTENT_TYPE" -d "$DATA" $URL_TELEGRAMM'         
+    needs:
+        - upload-backend-latest                   
+
+deploy:
+    stage: deploy
+    before_script:
+      - 'command -v ssh-agent >/dev/null || ( apt-get update -y && apt-get install openssh-client -y )'
+      - eval $(ssh-agent -s) 
+      - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+      - mkdir -p ~/.ssh
+      - chmod 600 ~/.ssh
+      - echo "$SSH_KNOWN_HOSTS" >> ~/.ssh/known_hosts
+      - chmod 644 ~/.ssh/known_hosts
+    script:
+      - ssh ${DEV_USER}@${DEV_HOST} "export "NEXUS_REPO_URL_HELM=${NEXUS_REPO_URL_HELM}" export "NEXUS_REPO_USER=${NEXUS_REPO_USER}" export "NEXUS_REPO_PASS=${NEXUS_REPO_PASS}"; setsid /bin/bash -s" < ./backend/helm.sh
+    needs:
+      - helm-repo-update
+    when: manual
